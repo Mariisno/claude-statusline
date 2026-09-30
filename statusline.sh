@@ -62,54 +62,59 @@ if [ -n "$dir" ] && git -C "$dir" rev-parse --is-inside-work-tree >/dev/null 2>&
   branch=$(git -C "$dir" branch --show-current 2>/dev/null)
   [ -z "$branch" ] && branch=$(git -C "$dir" rev-parse --short HEAD 2>/dev/null)
   [ -n "$(git -C "$dir" status --porcelain 2>/dev/null | head -1)" ] && branch="$branch*"
-  branch="  \033[38;5;183m⎇ $branch\033[0m"
+  branch="  \033[38;5;183m$branch\033[0m"
 fi
 
-# Soft pink greeting · soft blue project · dim grey practical info (for dark themes)
-printf "\033[38;5;218m%s\033[0m  \033[38;5;117m%s\033[0m%b  %s  \033[38;5;245m%s\033[0m  %s\n" \
+# Pastel palette (256-colour, made for dark themes)
+PINK=218; BLUE=117; LAVENDER=183; MINT=151; PEACH=223; ROSE=211; DIM=245; FAINT=239
+
+# Pink greeting · blue project · lavender branch · dim model
+printf "\033[38;5;${PINK}m%s\033[0m  \033[38;5;${BLUE}m%s\033[0m%b  %s  \033[38;5;${DIM}m%s\033[0m  %s\n" \
   "$greeting" "$project" "$branch" "$mood" "$model" "$cat_track"
 
-# ── Line 2: meters ────────────────────────────────────────────────────────────
-#   Ctx  how full this conversation is
-#   5h   the 5-hour limit, with time until it resets
-#   7d   the weekly limit, with the day and time it resets
-# Green under 50 %, amber 50–79 %, red from 80 %.
-bar() { # bar <percent>  →  10-cell bar, filled part coloured, empty part dotted
-  local p=$1 w=10 fill c
+# ── Line 2: soft dot meters ───────────────────────────────────────────────────
+#   ctx  how full this conversation is
+#   5h   the 5-hour limit, and time until it resets
+#   7d   the weekly limit, and the day and time it resets
+# Mint under 50 %, peach from 50 %, rose from 80 %.
+tone() { if [ "$1" -ge 80 ]; then echo $ROSE; elif [ "$1" -ge 50 ]; then echo $PEACH; else echo $MINT; fi; }
+dots() { # dots <percent>  →  ●●●○○○○○○○
+  local p=$1 w=10 fill c; c=$(tone "$p")
   fill=$(( (p * w + 50) / 100 )); [ "$fill" -gt "$w" ] && fill=$w
-  if   [ "$p" -ge 80 ]; then c=203
-  elif [ "$p" -ge 50 ]; then c=179
-  else c=114; fi
-  printf "\033[38;5;%sm" "$c"; for ((i = 0; i < fill; i++)); do printf "█"; done
-  printf "\033[38;5;240m";     for ((i = fill; i < w; i++)); do printf "░"; done
+  printf "\033[38;5;%sm" "$c";      for ((i = 0; i < fill; i++)); do printf "●"; done
+  printf "\033[38;5;%sm" "$FAINT";  for ((i = fill; i < w; i++)); do printf "○"; done
   printf "\033[0m"
+}
+meter() { # meter <label> <percent> [extra]
+  local c; c=$(tone "$2")
+  printf "\033[38;5;%sm%s\033[0m %s \033[38;5;%sm%s%%\033[0m" "$DIM" "$1" "$(dots "$2")" "$c" "$2"
+  [ -n "${3:-}" ] && printf " \033[38;5;%sm· %s\033[0m" "$LAVENDER" "$3"
 }
 until_reset() { # until_reset <epoch>  →  "1h 23m"
   local s=$(( $1 - $(date +%s) )); [ "$s" -lt 0 ] && s=0
   printf "%dh %02dm" $((s / 3600)) $((s % 3600 / 60))
 }
-reset_day() { # reset_day <epoch>  →  "fri 16:57" (macOS date -r, GNU date -d fallback)
-  { date -r "$1" "+%a %H:%M" 2>/dev/null || date -d "@$1" "+%a %H:%M"; } | tr '[:upper:]' '[:lower:]'
+reset_day() { # reset_day <epoch>  →  "fre 16:57" (macOS date -r, GNU date -d fallback)
+  local days=(man tir ons tor fre lør søn) d t
+  d=$(date -r "$1" +%u 2>/dev/null || date -d "@$1" +%u)
+  t=$(date -r "$1" +%H:%M 2>/dev/null || date -d "@$1" +%H:%M)
+  printf "%s %s" "${days[$((d - 1))]}" "$t"
 }
 num() { printf '%.0f' "${1:-0}"; }   # percentages can arrive as decimals
 
-meters=()
-if [ -n "$ctx_used" ]; then
-  p=$(num "$ctx_used"); meters+=("Ctx $(bar "$p") ${p}%")
-fi
+parts=()
+[ -n "$ctx_used" ] && parts+=("$(meter ctx "$(num "$ctx_used")")")
 h5=$(echo "$input" | jq -r '.rate_limits.five_hour.used_percentage // empty')
 if [ -n "$h5" ]; then
-  p=$(num "$h5"); r=$(echo "$input" | jq -r '.rate_limits.five_hour.resets_at // empty')
-  t=""; [ -n "$r" ] && t=" \033[38;5;183m($(until_reset "$r"))\033[0m"
-  meters+=("5h$t $(bar "$p") ${p}%")
+  r=$(echo "$input" | jq -r '.rate_limits.five_hour.resets_at // empty')
+  parts+=("$(meter 5h "$(num "$h5")" "${r:+$(until_reset "$r")}")")
 fi
 d7=$(echo "$input" | jq -r '.rate_limits.seven_day.used_percentage // empty')
 if [ -n "$d7" ]; then
-  p=$(num "$d7"); r=$(echo "$input" | jq -r '.rate_limits.seven_day.resets_at // empty')
-  t=""; [ -n "$r" ] && t=" \033[38;5;183m($(reset_day "$r"))\033[0m"
-  meters+=("7d$t $(bar "$p") ${p}%")
+  r=$(echo "$input" | jq -r '.rate_limits.seven_day.resets_at // empty')
+  parts+=("$(meter 7d "$(num "$d7")" "${r:+$(reset_day "$r")}")")
 fi
-if [ ${#meters[@]} -gt 0 ]; then
-  out="${meters[0]}"; for m in "${meters[@]:1}"; do out="$out  \033[38;5;240m|\033[0m  $m"; done
-  printf "%b" "$out"
+if [ ${#parts[@]} -gt 0 ]; then
+  out="${parts[0]}"; for m in "${parts[@]:1}"; do out="$out     $m"; done
+  printf "%s" "$out"
 fi
