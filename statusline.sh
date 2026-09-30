@@ -1,6 +1,6 @@
 #!/bin/bash
 # Mari's Claude Code status line 🌸
-# Line 1: greeting · project · git branch · daily mood · model + effort · cat
+# Line 1: greeting · project · git branch · model + effort · MAX tag · cat
 # Line 2: meters for context, the 5-hour limit and the weekly limit
 # Claude Code runs this and shows whatever it prints at the bottom of the window.
 
@@ -23,14 +23,18 @@ elif [ "$hour" -ge 17 ] && [ "$hour" -lt 23 ]; then greeting="God kveld, Mari �
 else greeting="God natt, Mari ✨"
 fi
 
-# A little mood that changes once a day
-moods=(🌸 🌷 🦋 🍀 🌈 ⭐ 🌻)
-day_of_year=$((10#$(date +%j)))
-mood=${moods[$((day_of_year % ${#moods[@]}))]}
-
 # Effort level (how deeply Claude thinks), shown next to the model name
 effort=$(echo "$input" | jq -r '.effort.level // empty')
-[ -n "$effort" ] && model="$model · $effort"
+# Effort below high is shown in peach, so an accidental downgrade is visible
+effort_tag=""
+if [ -n "$effort" ]; then
+  case "$effort" in high|xhigh|max) effort_tag=" · $effort" ;;
+                   *) effort_tag=" · \033[38;5;223m$effort\033[38;5;245m" ;; esac
+fi
+
+# Which account: a MAX tag when Claude Code runs on a separate config dir named *max*
+account=""
+case "${CLAUDE_CONFIG_DIR:-}" in *max*) account="  \033[1;38;5;223mMAX\033[0m" ;; esac
 
 # Usage numbers (shown as meters on line 2):
 usage=""
@@ -45,13 +49,12 @@ ctx_used=$(echo "$input" | jq -r '.context_window.used_percentage // empty')
 
 # 🐈 A little cat trots across the line, one step per second.
 # The status line redraws while Claude works, so the cat appears to run.
-track_len=10
+track_len=6
 pos=$(( track_len - 1 - ($(date +%s) % track_len) ))  # runs right-to-left, then loops
 cat_track=""
 for ((i = 0; i < track_len; i++)); do
   if   [ "$i" -eq "$pos" ];        then cat_track+="🐈"
   elif [ "$i" -eq $((pos + 2)) ];  then cat_track+="🐾"
-  elif [ "$i" -eq $((pos + 5)) ];  then cat_track+="🐾"
   else cat_track+="  "
   fi
 done
@@ -66,18 +69,18 @@ if [ -n "$dir" ] && git -C "$dir" rev-parse --is-inside-work-tree >/dev/null 2>&
 fi
 
 # Pastel palette (256-colour, made for dark themes)
-PINK=218; BLUE=117; LAVENDER=183; MINT=151; PEACH=223; ROSE=211; DIM=245; FAINT=239
+PINK=218; BLUE=117; LAVENDER=183; MINT=151; PEACH=223; CORAL=209; DIM=245; FAINT=242
 
-# Pink greeting · blue project · lavender branch · dim model
-printf "\033[38;5;${PINK}m%s\033[0m  \033[38;5;${BLUE}m%s\033[0m%b  %s  \033[38;5;${DIM}m%s\033[0m  %s\n" \
-  "$greeting" "$project" "$branch" "$mood" "$model" "$cat_track"
+# Pink greeting · blue project · lavender branch · dim model + effort · MAX tag · cat
+printf "\033[38;5;${PINK}m%s\033[0m  \033[38;5;${BLUE}m%s\033[0m%b  \033[38;5;${DIM}m%s%b\033[0m%b  %s\n" \
+  "$greeting" "$project" "$branch" "$model" "$effort_tag" "$account" "$cat_track"
 
 # ── Line 2: soft dot meters ───────────────────────────────────────────────────
 #   ctx  how full this conversation is
 #   5h   the 5-hour limit, and time until it resets
 #   7d   the weekly limit, and the day and time it resets
-# Mint under 50 %, peach from 50 %, rose from 80 %.
-tone() { if [ "$1" -ge 80 ]; then echo $ROSE; elif [ "$1" -ge 50 ]; then echo $PEACH; else echo $MINT; fi; }
+# Mint under 50 %, peach from 50 %, coral from 80 % (coral stays clear of the pink greeting).
+tone() { if [ "$1" -ge 80 ]; then echo $CORAL; elif [ "$1" -ge 50 ]; then echo $PEACH; else echo $MINT; fi; }
 dots() { # dots <percent>  →  ●●●○○○○○○○
   local p=$1 w=10 fill c; c=$(tone "$p")
   fill=$(( (p * w + 50) / 100 )); [ "$fill" -gt "$w" ] && fill=$w
@@ -115,6 +118,6 @@ if [ -n "$d7" ]; then
   parts+=("$(meter 7d "$(num "$d7")" "${r:+$(reset_day "$r")}")")
 fi
 if [ ${#parts[@]} -gt 0 ]; then
-  out="${parts[0]}"; for m in "${parts[@]:1}"; do out="$out     $m"; done
+  out="${parts[0]}"; for m in "${parts[@]:1}"; do out="$out   $m"; done
   printf "%s" "$out"
 fi
