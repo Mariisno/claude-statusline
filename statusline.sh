@@ -36,11 +36,20 @@ fi
 account=""
 case "${CLAUDE_CONFIG_DIR:-}" in *max*) account="  \033[1;38;5;223mMAX\033[0m" ;; esac
 
+# Percentages can arrive as decimals (33.3), and $((…)) only takes whole numbers.
+# Rounds in plain bash, because printf %.0f fails under a locale with a decimal comma.
+num() { # num 33.3 → 33 · 66.6 → 67
+  local v=${1:-0} i f
+  i=${v%%.*}; f=${v#"$i"}; f=${f#.}
+  [ "${f:0:1}" -ge 5 ] 2>/dev/null && i=$((${i:-0} + 1))
+  printf "%s" "${i:-0}"
+}
+
 # Usage numbers (shown as meters on line 2):
 usage=""
 limit_used=$(echo "$input" | jq -r '.rate_limits.five_hour.used_percentage // empty')
 if [ -n "$limit_used" ]; then
-  left=$((100 - limit_used))
+  left=$((100 - $(num "$limit_used")))
   batt="🔋"; [ "$left" -lt 30 ] && batt="🪫"
   usage="$batt ${left}%"
 fi
@@ -94,16 +103,16 @@ meter() { # meter <label> <percent> [extra]
   [ -n "${3:-}" ] && printf " \033[38;5;%sm· %s\033[0m" "$LAVENDER" "$3"
 }
 until_reset() { # until_reset <epoch>  →  "1h 23m"
-  local s=$(( $1 - $(date +%s) )); [ "$s" -lt 0 ] && s=0
+  local s=$(( ${1%%.*} - $(date +%s) )); [ "$s" -lt 0 ] && s=0
   printf "%dh %02dm" $((s / 3600)) $((s % 3600 / 60))
 }
 reset_day() { # reset_day <epoch>  →  "fre 16:57" (macOS date -r, GNU date -d fallback)
   local days=(man tir ons tor fre lør søn) d t
-  d=$(date -r "$1" +%u 2>/dev/null || date -d "@$1" +%u)
-  t=$(date -r "$1" +%H:%M 2>/dev/null || date -d "@$1" +%H:%M)
+  local e=${1%%.*}
+  d=$(date -r "$e" +%u 2>/dev/null || date -d "@$e" +%u)
+  t=$(date -r "$e" +%H:%M 2>/dev/null || date -d "@$e" +%H:%M)
   printf "%s %s" "${days[$((d - 1))]}" "$t"
 }
-num() { printf '%.0f' "${1:-0}"; }   # percentages can arrive as decimals
 
 parts=()
 [ -n "$ctx_used" ] && parts+=("$(meter ctx "$(num "$ctx_used")")")
