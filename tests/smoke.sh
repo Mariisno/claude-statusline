@@ -37,7 +37,7 @@ STATUSLINE_PERSONAL=0 run 'signature off: no name' "$opus" 'Opus' 'Mari'
 STATUSLINE_PERSONAL=0 run 'signature off: no Sussi' "$opus" 'Opus' '🐈'
 STATUSLINE_NAME=Ola run 'own name' "$opus" ', Ola' 'Mari'
 STATUSLINE_NAME= run 'no name' "$opus" 'Opus' 'Mari'
-CLAUDE_CONFIG_DIR="$tmp/.claude-max" run 'no account tag' "$opus" 'Opus' 'MAX'
+CLAUDE_CONFIG_DIR="$tmp/.claude-second" run 'no account tag' "$opus" 'Opus' 'SECOND'
 for flag in --version --help; do
   out=$(bash "$root/statusline.sh" "$flag" </dev/null 2>&1)
   if [[ "$out" == *"by Mari Svennevik Notland"* ]]; then echo "✓ $flag"; else echo "✗ $flag: $out"; failed=1; fi
