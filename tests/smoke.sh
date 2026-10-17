@@ -25,5 +25,10 @@ run 'empty input' '{}' 'Claude'
 run 'low effort' '{"model":{"display_name":"Opus"},"effort":{"level":"medium"}}' 'medium'
 run 'decimal percentages' '{"model":{"display_name":"Opus"},"context_window":{"used_percentage":12.5},
   "rate_limits":{"five_hour":{"used_percentage":33.3}}}' 'Opus'
+run 'rounds to whole percent' '{"model":{"display_name":"Opus"},"rate_limits":{"five_hour":{"used_percentage":66.6}}}' '67%'
+run 'decimal reset times' '{"model":{"display_name":"Opus"},"rate_limits":{"five_hour":{"used_percentage":10,"resets_at":'$((now + 3600)).5'},
+  "seven_day":{"used_percentage":20,"resets_at":'$((now + 86400)).5'}}}' '7d'
+# A decimal comma locale must not break the rounding (printf %.0f does under nb_NO).
+LC_ALL=nb_NO.UTF-8 run 'Norwegian locale' '{"model":{"display_name":"Opus"},"context_window":{"used_percentage":12.5}}' '13%'
 
 exit $failed
