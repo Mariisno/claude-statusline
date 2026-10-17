@@ -1,8 +1,40 @@
 #!/bin/bash
-# Mari's Claude Code status line 🌸
-# Line 1: greeting · project · git branch · model + effort · MAX tag · cat
+# claude-statusline by Mari Svennevik Notland 🌸 · https://github.com/Mariisno/claude-statusline · MIT License
+# Line 1: greeting · project · git branch · model + effort · Sussi the cat
 # Line 2: meters for context, the 5-hour limit and the weekly limit
 # Claude Code runs this and shows whatever it prints at the bottom of the window.
+# Nothing leaves your machine: it reads the JSON on stdin, prints two lines and keeps one
+# small local usage snapshot (see below).
+#
+# Make it yours (environment variables, e.g. in the statusLine command):
+#   STATUSLINE_NAME=Ola      the name in the greeting (empty: no name). Default: Mari
+#   STATUSLINE_PERSONAL=0    turns off my signature: no name unless you set one, and no Sussi
+
+VERSION="1.1.0"
+case "${1:-}" in
+  --version|-v) echo "claude-statusline $VERSION by Mari Svennevik Notland"; exit 0 ;;
+  --help|-h)
+    cat <<'EOF'
+claude-statusline: a cozy two-line status line for Claude Code
+by Mari Svennevik Notland 🌸 · https://github.com/Mariisno/claude-statusline
+
+Claude Code pipes its session JSON to stdin, and the script prints two lines.
+
+  STATUSLINE_NAME=Ola      the name in the greeting (empty: no name). Default: Mari
+  STATUSLINE_PERSONAL=0    turns off my signature: no name unless you set one, and no Sussi
+
+  --help     this text
+  --version  the version
+EOF
+    exit 0 ;;
+esac
+
+# My signature: my name in the greeting and Sussi, the cat my design system is named after.
+personal="${STATUSLINE_PERSONAL:-1}"
+if [ -n "${STATUSLINE_NAME+set}" ]; then name="$STATUSLINE_NAME"
+elif [ "$personal" = "0" ]; then name=""
+else name="Mari"; fi
+hi="${name:+, $name}"
 
 input=$(cat)
 
@@ -17,10 +49,10 @@ project=$(basename "${dir:-~}")
 
 # Greeting that follows the clock
 hour=$((10#$(date +%H)))
-if   [ "$hour" -ge 6 ]  && [ "$hour" -lt 10 ]; then greeting="God morgen, Mari ☀️"
-elif [ "$hour" -ge 10 ] && [ "$hour" -lt 17 ]; then greeting="God dag, Mari 🌤️"
-elif [ "$hour" -ge 17 ] && [ "$hour" -lt 23 ]; then greeting="God kveld, Mari 🌙"
-else greeting="God natt, Mari ✨"
+if   [ "$hour" -ge 6 ]  && [ "$hour" -lt 10 ]; then greeting="God morgen$hi ☀️"
+elif [ "$hour" -ge 10 ] && [ "$hour" -lt 17 ]; then greeting="God dag$hi 🌤️"
+elif [ "$hour" -ge 17 ] && [ "$hour" -lt 23 ]; then greeting="God kveld$hi 🌙"
+else greeting="God natt$hi ✨"
 fi
 
 # Effort level (how deeply Claude thinks), shown next to the model name
@@ -31,10 +63,6 @@ if [ -n "$effort" ]; then
   case "$effort" in high|xhigh|max) effort_tag=" · $effort" ;;
                    *) effort_tag=" · \033[38;5;223m$effort\033[38;5;245m" ;; esac
 fi
-
-# Which account: a MAX tag when Claude Code runs on a separate config dir named *max*
-account=""
-case "${CLAUDE_CONFIG_DIR:-}" in *max*) account="  \033[1;38;5;223mMAX\033[0m" ;; esac
 
 # Percentages can arrive as decimals (33.3), and $((…)) only takes whole numbers.
 # Rounds in plain bash, because printf %.0f fails under a locale with a decimal comma.
@@ -56,17 +84,21 @@ fi
 ctx_used=$(echo "$input" | jq -r '.context_window.used_percentage // empty')
 [ -n "$ctx_used" ] && usage="$usage  🧠 ${ctx_used}%"
 
-# 🐈 A little cat trots across the line, one step per second.
-# The status line redraws while Claude works, so the cat appears to run.
+# 🐈 Sussi trots across the line, one step per second.
+# The status line redraws while Claude works, so she appears to run. At night she sleeps.
 track_len=6
-pos=$(( track_len - 1 - ($(date +%s) % track_len) ))  # runs right-to-left, then loops
 cat_track=""
-for ((i = 0; i < track_len; i++)); do
-  if   [ "$i" -eq "$pos" ];        then cat_track+="🐈"
-  elif [ "$i" -eq $((pos + 2)) ];  then cat_track+="🐾"
-  else cat_track+="  "
-  fi
-done
+if [ "$personal" = "0" ]; then :
+elif [ "$hour" -ge 23 ] || [ "$hour" -lt 6 ]; then cat_track="🐈💤"
+else
+  pos=$(( track_len - 1 - ($(date +%s) % track_len) ))  # runs right-to-left, then loops
+  for ((i = 0; i < track_len; i++)); do
+    if   [ "$i" -eq "$pos" ];        then cat_track+="🐈"
+    elif [ "$i" -eq $((pos + 2)) ];  then cat_track+="🐾"
+    else cat_track+="  "
+    fi
+  done
+fi
 
 # Git branch, with * when there are unsaved (uncommitted) changes
 branch=""
@@ -80,9 +112,9 @@ fi
 # Pastel palette (256-colour, made for dark themes)
 PINK=218; BLUE=117; LAVENDER=183; MINT=151; PEACH=223; CORAL=209; DIM=245; FAINT=242
 
-# Pink greeting · blue project · lavender branch · dim model + effort · MAX tag · cat
-printf "\033[38;5;${PINK}m%s\033[0m  \033[38;5;${BLUE}m%s\033[0m%b  \033[38;5;${DIM}m%s%b\033[0m%b  %s\n" \
-  "$greeting" "$project" "$branch" "$model" "$effort_tag" "$account" "$cat_track"
+# Pink greeting · blue project · lavender branch · dim model + effort · Sussi
+printf "\033[38;5;${PINK}m%s\033[0m  \033[38;5;${BLUE}m%s\033[0m%b  \033[38;5;${DIM}m%s%b\033[0m%s\n" \
+  "$greeting" "$project" "$branch" "$model" "$effort_tag" "${cat_track:+  $cat_track}"
 
 # ── Line 2: soft dot meters ───────────────────────────────────────────────────
 #   ctx  how full this conversation is
