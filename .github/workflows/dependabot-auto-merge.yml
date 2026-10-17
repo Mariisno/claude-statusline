@@ -1,0 +1,61 @@
+# Dependabot PRs: patch and minor updates are squash-merged once the repo's other workflows
+# have passed; major updates are labelled and left open for a person. Other authors' PRs skip
+# this job. This waits for the checks itself, because the free plan has no required checks for
+# --auto to wait on. Only Actions check runs count; commit statuses (Vercel) are ignored.
+name: Dependabot auto-merge
+
+on: pull_request
+
+permissions:
+  checks: read
+  contents: write
+  issues: write
+  pull-requests: write
+
+# A new push to the PR (Dependabot rebasing) starts a fresh wait.
+concurrency:
+  group: dependabot-auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  auto-merge:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PR_URL: ${{ github.event.pull_request.html_url }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - id: metadata
+        uses: dependabot/fetch-metadata@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Wait for the other workflows, then squash-merge patch and minor updates
+        if: steps.metadata.outputs.update-type == 'version-update:semver-patch' || steps.metadata.outputs.update-type == 'version-update:semver-minor'
+        run: |
+          sleep 60 # let the other workflows register their runs
+          for _ in $(seq 1 50); do
+            runs=$(gh pr view "$PR_URL" --json statusCheckRollup --jq '[.statusCheckRollup[] | select(.__typename == "CheckRun" and .workflowName != "Dependabot auto-merge")]')
+            total=$(jq length <<< "$runs")
+            pending=$(jq '[.[] | select(.status != "COMPLETED")] | length' <<< "$runs")
+            failed=$(jq '[.[] | select(.status == "COMPLETED" and (.conclusion | IN("SUCCESS", "SKIPPED", "NEUTRAL") | not))] | length' <<< "$runs")
+            if [ "$failed" -gt 0 ]; then
+              echo "A check failed, leaving the PR open."
+              exit 1
+            fi
+            if [ "$total" -gt 0 ] && [ "$pending" -eq 0 ]; then
+              gh pr merge --squash --match-head-commit "$HEAD_SHA" "$PR_URL"
+              exit 0
+            fi
+            sleep 30
+          done
+          echo "The checks did not finish in time, leaving the PR open."
+          exit 1
+
+      - name: Label major updates and leave them open
+        if: steps.metadata.outputs.update-type == 'version-update:semver-major'
+        run: |
+          gh label create major-update --color D93F0B --description "Major version bump, needs a person" 2>/dev/null || true
+          gh pr edit "$PR_URL" --add-label major-update

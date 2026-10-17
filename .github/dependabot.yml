@@ -1,0 +1,15 @@
+# One grouped PR per ecosystem per week for patch and minor updates. Major updates match no
+# group, so each one gets its own PR. The auto-merge workflow handles both kinds.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Oslo
+    groups:
+      actions-minor-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
