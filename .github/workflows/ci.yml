@@ -1,5 +1,5 @@
 # Runs ShellCheck (errors only) and the smoke test on every PR and on push to main.
-# jq and ShellCheck come with the Ubuntu runner. No secrets.
+# jq, ShellCheck and locale-gen come with the Ubuntu runner. No secrets.
 name: CI
 
 on:
@@ -16,5 +16,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+      # nb_NO for the smoke test's decimal-comma case (not on the runner by default).
+      - run: sudo locale-gen nb_NO.UTF-8
       - run: shellcheck --severity=error statusline.sh tests/smoke.sh
       - run: bash tests/smoke.sh

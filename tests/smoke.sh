@@ -29,6 +29,8 @@ run 'rounds to whole percent' '{"model":{"display_name":"Opus"},"rate_limits":{"
 run 'decimal reset times' '{"model":{"display_name":"Opus"},"rate_limits":{"five_hour":{"used_percentage":10,"resets_at":'$((now + 3600)).5'},
   "seven_day":{"used_percentage":20,"resets_at":'$((now + 86400)).5'}}}' '7d'
 # A decimal comma locale must not break the rounding (printf %.0f does under nb_NO).
-LC_ALL=nb_NO.UTF-8 run 'Norwegian locale' '{"model":{"display_name":"Opus"},"context_window":{"used_percentage":12.5}}' '13%'
+if locale -a 2>/dev/null | grep -qiE "^nb_NO\.utf-?8$"; then
+  LC_ALL=nb_NO.UTF-8 run 'Norwegian locale' '{"model":{"display_name":"Opus"},"context_window":{"used_percentage":12.5}}' '13%'
+else echo "- Norwegian locale: skipped, nb_NO.UTF-8 is not installed"; fi
 
 exit $failed
